@@ -1,0 +1,35 @@
+name: Build (Release)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-bats-version:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Create and enter build directory
+        run: |
+          dir
+          mkdir build
+          cd build
+          dir
+
+      - name: Configure CMake
+        working-directory: build
+        run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD="X86" -G "NMake Makefiles" ..
+
+      - name: Build with NMake
+        working-directory: build
+        run: nmake
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts
+          path: build/
