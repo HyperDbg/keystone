@@ -7,7 +7,7 @@ on:
       - '*'
 
 jobs:
-  check-bats-version:
+  build-and-upload:
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -16,45 +16,78 @@ jobs:
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Create and enter build directory
+      - name: Create and enter build directory for release
         run: |
           dir
-          mkdir build
-          cd build
+          mkdir build_release
+          cd build_release
           dir
 
-      - name: Configure CMake
-        working-directory: build
+      - name: Configure CMake for Release
+        working-directory: build_release
         run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD="X86" -G "NMake Makefiles" ..
 
-      - name: Build with NMake
-        working-directory: build
+      - name: Build with NMake for Release
+        working-directory: build_release
         run: nmake
 
-      - name: Upload build artifacts
+      - name: Create and enter build directory for debug
+        run: |
+          dir
+          mkdir build_debug
+          cd build_debug
+          dir
+
+      - name: Configure CMake for Debug
+        working-directory: build_debug
+        run: cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD="X86" -G "NMake Makefiles" ..
+
+      - name: Build with NMake for Debug
+        working-directory: build_debug
+        run: nmake
+
+      - name: Upload build artifacts for Release
         uses: actions/upload-artifact@v2
         with:
-          name: build-artifacts
-          path: build/
+          name: build-artifacts-release
+          path: build_release/
+
+      - name: Upload build artifacts for Debug
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts-debug
+          path: build_debug/
 
   release:
-    needs: check-bats-version
+    needs: build-and-upload
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download build artifacts
+      - name: Download build artifacts for Release
         uses: actions/download-artifact@v2
         with:
-          name: build-artifacts
-          path: build/
+          name: build-artifacts-release
+          path: build_release/
 
-      - name: Zip build artifacts
+      - name: Download build artifacts for Debug
+        uses: actions/download-artifact@v2
+        with:
+          name: build-artifacts-debug
+          path: build_debug/
+
+      - name: Zip build artifacts for Release
         run: |
           sudo apt-get install zip
-          cd build
-          zip -r build-artifacts.zip .
+          cd build_release
+          zip -r build-artifacts-release.zip .
+
+      - name: Zip build artifacts for Debug
+        run: |
+          sudo apt-get install zip
+          cd build_debug
+          zip -r build-artifacts-debug.zip .
 
       - name: Create GitHub Release
         id: create_release
@@ -67,12 +100,22 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset for Release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build/build-artifacts.zip
-          asset_name: build-artifacts.zip
+          asset_path: ./build_release/build-artifacts-release.zip
+          asset_name: build-artifacts-release.zip
+          asset_content_type: application/zip
+
+      - name: Upload Release Asset for Debug
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_debug/build-artifacts-debug.zip
+          asset_name: build-artifacts-debug.zip
           asset_content_type: application/zip
